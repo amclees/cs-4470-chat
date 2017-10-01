@@ -1,13 +1,65 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <thread>
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <list>
+#include <map>
+#include <mutex>
 
-void register_connection(int socket) {
-  std::cout << "Made connection with socket descriptor " << socket;
+std::mutex conn_info_mutex;
+int id = 0;
+
+struct conn_info {
+  int id;
+  int socket;
+  int port;
+  char ip_str[INET6_ADDRSTRLEN];
+  char port_str[6];
+};
+
+struct conn_ledger {
+  std::list<int>* list;
+  std::map<int, struct conn_info>* map;
+};
+
+int get_id() {
+  conn_info_mutex.lock();
+  int new_id = id++;
+  conn_info_mutex.unlock();
+  return new_id;
+}
+
+void register_connection(struct conn_ledger* ledger, struct conn_info conn_info) {
+  std::cerr << "Made connection with\n  socket descriptor " << conn_info.socket << "\n  " << conn_info.ip_str << ":" << conn_info.port_str << "\n";
+  ledger->list->push_back(conn_info.id);
+  ledger->map->insert(std::pair<int, struct conn_info>(conn_info.id, conn_info));
+}
+
+struct conn_info make_conn_info(int socket, int port, struct sockaddr* dest_addr) {
+  struct conn_info conn_info;
+  conn_info.id = get_id();
+  conn_info.socket = socket;
+  conn_info.port = port;
+  
+  switch (dest_addr->sa_family) {
+    case AF_INET:
+      inet_ntop(AF_INET, &(((struct sockaddr_in*)dest_addr)->sin_addr), conn_info.ip_str, INET_ADDRSTRLEN);
+      break;
+    case AF_INET6:
+      inet_ntop(AF_INET6, &(((struct sockaddr_in6*)dest_addr)->sin6_addr), conn_info.ip_str, INET6_ADDRSTRLEN);
+      break;
+    default:
+      std::cerr << "Invalid address family in dest_addr struct when making connection info.\n";
+      break;
+  }
+
+  sprintf(conn_info.port_str, "%d", port);
+
+  return conn_info;
 }
 
 // Checks the termination variable and returns false if the thread should clean up and check in
@@ -19,7 +71,7 @@ void print_listen_failure_msg(int port) {
   std::cout << "Unable to begin listening on port " << port << ". No connections will be accepted, but you can still initiate connections from this computer.\n";
 }
 
-void listen_new_connections(int port) {
+void listen_new_connections(struct conn_ledger* ledger, int port) {
   int status;
   struct addrinfo hints;
   struct addrinfo* servinfo;
@@ -63,14 +115,13 @@ void listen_new_connections(int port) {
 
     int accepted_socket = accept(new_conn_socket, (struct sockaddr*)&dest_addr, &addr_size);
     if (accepted_socket == -1) {
-      std::cerr << "Unable to accept new connectioni.\n";
+      std::cerr << "Unable to accept new connection.\n";
       std::cout << "Failed to accept an incoming connection; continuing to listen for new connections.\n";
       continue;
     }
 
-    register_connection(accepted_socket);
+    register_connection(ledger, make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr));
   }
-  // Make new connections' threads
 
   freeaddrinfo(servinfo);
 }
@@ -106,8 +157,15 @@ int main(int argc, char** argv) {
     std::cout << "The port must be a number between 1 and 65535\n";
     return 1;
   }
+
   std::cout << "Initializing chat on port " << port << "\n";
-  std::thread new_connections(listen_new_connections, port);
+  struct conn_ledger ledger;
+  std::list<int> ledger_list;
+  std::map<int, struct conn_info> ledger_map;
+  ledger.list = &ledger_list;
+  ledger.map = &ledger_map;
+
+  std::thread new_connections(&ledger, listen_new_connections, port);
 
   handle_cin();
 
