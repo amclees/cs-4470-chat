@@ -6,6 +6,15 @@
 #include <string>
 #include <cstring>
 
+void register_connection(int socket) {
+  std::cout << "Made connection with socket descriptor " << socket;
+}
+
+// Checks the termination variable and returns false if the thread should clean up and check in
+bool running_check() {
+  return true;
+}
+
 void print_listen_failure_msg(int port) {
   std::cout << "Unable to begin listening on port " << port << ". No connections will be accepted, but you can still initiate connections from this computer.\n";
 }
@@ -14,6 +23,8 @@ void listen_new_connections(int port) {
   int status;
   struct addrinfo hints;
   struct addrinfo* servinfo;
+  struct sockaddr_storage dest_addr;
+  socklen_t addr_size = sizeof(dest_addr);
   char port_str[6];
   sprintf(port_str, "%d", port);
 
@@ -42,7 +53,23 @@ void listen_new_connections(int port) {
     std::terminate();
   }
 
-  // Make new connections
+  while (running_check()) {
+    int listen_status = listen(new_conn_socket, 5);
+    if (listen_status == -1) {
+      std::cerr << "Unable to listen on port " << port << ".\n";
+      print_listen_failure_msg(port);
+      std::terminate();
+    }
+
+    int accepted_socket = accept(new_conn_socket, (struct sockaddr*)&dest_addr, &addr_size);
+    if (accepted_socket == -1) {
+      std::cerr << "Unable to accept new connectioni.\n";
+      std::cout << "Failed to accept an incoming connection; continuing to listen for new connections.\n";
+      continue;
+    }
+
+    register_connection(accepted_socket);
+  }
   // Make new connections' threads
 
   freeaddrinfo(servinfo);
