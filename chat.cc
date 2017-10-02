@@ -71,6 +71,39 @@ bool running_check() {
   return !global_exit;
 }
 
+void listen_messages(struct conn_ledger* ledger, int id, int socket) {
+  char message_buf[100];
+  while(running_check() && !ledger->map->at(id).terminate) {
+    int recv_status = recv(socket, message_buf, 100, 0);
+    switch (recv_status) {
+      case 0:
+        std::cout << "Connection closed: #" << id << " at " << ledger->map->at(id).ip_str << " port " << ledger->map->at(id).port_str << "\n";
+        break;
+      case -1:
+        std::cout << "Error receiving message from connection #" << id << "\n";
+        continue;
+    }
+
+    std::cout << "Message received from " << ledger->map->at(id).ip_str << "\n";
+    std::cout << "Sender's Port: " << ledger->map->at(id).port_str << "\n";
+    std::cout << "Message: \"" << message_buf << "\"\n";
+  }
+  close(socket);
+  std::cout << "Connection #" << id << " terminated\n";
+}
+
+void send_message(struct conn_ledger* ledger, int id, char message[100]) {
+  int socket = ledger->map->at(id).socket;
+  int send_status = send(socket, message, 100, 0);
+  switch (send_status) {
+    case -1:
+      std::cout << "Error sending message to connection #" << id << "\n";
+    default:
+      std::cout << "Message send to connection #" << id << "\n";
+      break;
+  }
+}
+
 void print_listen_failure_msg(int port) {
   std::cout << "Unable to begin listening on port " << port << ". No connections will be accepted, but you can still initiate connections from this computer.\n";
 }
@@ -124,31 +157,12 @@ void listen_new_connections(struct conn_ledger* ledger, int port) {
       continue;
     }
 
-    register_connection(ledger, make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr));
+    struct conn_info conn_info = make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr);
+    register_connection(ledger, conn_info);
+    std::thread listener_thread(listen_messages, ledger, conn_info.id, port);
   }
 
   freeaddrinfo(servinfo);
-}
-
-void listen_messages(struct conn_ledger* ledger, int id, int socket) {
-  char message_buf[100];
-  while(running_check() && !ledger->map->at(id).terminate) {
-    int recv_status = recv(socket, message_buf, 100, 0);
-
-    switch (recv_status) {
-      case 0:
-        std::cout << "Connection #" << id << " at " << ledger->map->at(id).ip_str << " port " << ledger->map->at(id).port_str << "\n";
-        break;
-      case -1:
-        std::cout << "Error receiving message from connection #" << id << "\n";
-        break;
-    }
-
-    std::cout << "Message received from " << ledger->map->at(id).ip_str << "\n";
-    std::cout << "Sender's Port: " << ledger->map->at(id).port_str << "\n";
-    std::cout << "Message: \"" << message_buf << "\"\n";
-  }
-  close(socket);
 }
 
 void connect(struct conn_ledger* ledger, std::string dest, int port) {
@@ -159,27 +173,33 @@ void connect(struct conn_ledger* ledger, std::string dest, int port) {
   socklen_t addr_size = sizeof(dest_addr);
   char port_str[6];
   sprintf(port_str, "%d", port);
+  const char* dest_str = dest.c_str();
 
   std::memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_flags = AI_PASSIVE;
   hints.ai_socktype = SOCK_STREAM;
 
-  if ((status = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0) {
+  if ((status = getaddrinfo(dest_str, port_str, &hints, &servinfo)) != 0) {
     std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << "\n";
+    // TODO: Error message
     return;
   }
 
-  int new_conn_socket = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
-  if (new_conn_socket == -1) {
+  int socket_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+  if (socket_fd == -1) {
     std::cerr << "Unable to get socket descriptor to connect";
     // TODO: Error message
     return;
   }
 
-  //register_connection(ledger, make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr));
+  connect(socket_fd, servinfo->ai_addr, servinfo->ai_addrlen);
 
-  //std::thread incoming_messages(ledger, listen_messages, ledger, id, port);
+  struct conn_info conn_info = make_conn_info(socket_fd, port, (struct sockaddr*)&dest_addr);
+
+  register_connection(ledger, conn_info);
+
+  std::thread incoming_messages(listen_messages, ledger, id, port);
 
   freeaddrinfo(servinfo);
 }
@@ -215,7 +235,7 @@ int main(int argc, char** argv) {
   ledger.list = &ledger_list;
   ledger.map = &ledger_map;
 
-  std::thread new_connections(&ledger, listen_new_connections, port);
+  std::thread new_connections(listen_new_connections, &ledger, port);
 
   handle_cin();
 
