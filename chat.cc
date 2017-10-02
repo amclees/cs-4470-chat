@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <unistd.h>
 #include <thread>
 #include <iostream>
 #include <string>
@@ -12,11 +13,13 @@
 
 std::mutex conn_info_mutex;
 int id = 0;
+bool global_exit = false;
 
 struct conn_info {
   int id;
   int socket;
   int port;
+  bool terminate;
   char ip_str[INET6_ADDRSTRLEN];
   char port_str[6];
 };
@@ -44,6 +47,7 @@ struct conn_info make_conn_info(int socket, int port, struct sockaddr* dest_addr
   conn_info.id = get_id();
   conn_info.socket = socket;
   conn_info.port = port;
+  conn_info.terminate = false;
   
   switch (dest_addr->sa_family) {
     case AF_INET:
@@ -64,7 +68,7 @@ struct conn_info make_conn_info(int socket, int port, struct sockaddr* dest_addr
 
 // Checks the termination variable and returns false if the thread should clean up and check in
 bool running_check() {
-  return true;
+  return !global_exit;
 }
 
 void print_listen_failure_msg(int port) {
@@ -126,12 +130,58 @@ void listen_new_connections(struct conn_ledger* ledger, int port) {
   freeaddrinfo(servinfo);
 }
 
-void listen_messages(/*socket*/) {
+void listen_messages(struct conn_ledger* ledger, int id, int socket) {
+  char message_buf[100];
+  while(running_check() && !ledger->map->at(id).terminate) {
+    int recv_status = recv(socket, message_buf, 100, 0);
 
+    switch (recv_status) {
+      case 0:
+        std::cout << "Connection #" << id << " at " << ledger->map->at(id).ip_str << " port " << ledger->map->at(id).port_str << "\n";
+        break;
+      case -1:
+        std::cout << "Error receiving message from connection #" << id << "\n";
+        break;
+    }
+
+    std::cout << "Message received from " << ledger->map->at(id).ip_str << "\n";
+    std::cout << "Sender's Port: " << ledger->map->at(id).port_str << "\n";
+    std::cout << "Message: \"" << message_buf << "\"\n";
+  }
+  close(socket);
 }
 
-void connect(std::string dest, int port) {
+void connect(struct conn_ledger* ledger, std::string dest, int port) {
+  int status;
+  struct addrinfo hints;
+  struct addrinfo* servinfo;
+  struct sockaddr_storage dest_addr;
+  socklen_t addr_size = sizeof(dest_addr);
+  char port_str[6];
+  sprintf(port_str, "%d", port);
 
+  std::memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_flags = AI_PASSIVE;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if ((status = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0) {
+    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << "\n";
+    return;
+  }
+
+  int new_conn_socket = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+  if (new_conn_socket == -1) {
+    std::cerr << "Unable to get socket descriptor to connect";
+    // TODO: Error message
+    return;
+  }
+
+  //register_connection(ledger, make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr));
+
+  //std::thread incoming_messages(ledger, listen_messages, ledger, id, port);
+
+  freeaddrinfo(servinfo);
 }
 
 void handle_cin() {
