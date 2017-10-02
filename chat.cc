@@ -10,7 +10,9 @@
 #include <list>
 #include <map>
 #include <mutex>
-
+#include <sstream>
+#include <vector>
+#include <iterator>
 std::mutex conn_info_mutex;
 int id = 0;
 bool global_exit = false;
@@ -183,9 +185,41 @@ void connect(struct conn_ledger* ledger, std::string dest, int port) {
 
   freeaddrinfo(servinfo);
 }
+void help(){
+	std::cout << "myip : Displays host ip address" << std::endl;
+	std::cout << "myport : Displays port currently listening for incoming connections"<<std::endl;
+	std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer"<<std::endl;
+	std::cout << "list : Prints a list of all saved connections"<<std::endl;
+	std::cout << "terminate <connection id> : Closes the selected connections"<<std::endl;
+	std::cout << "send <connection id> <message> : Sends a message to the selected connection"<<std::endl;
+	std::cout << "exit : Terinates all existing connections  and terminates the program"<<std::endl;
+	
+}	
+void handle_cin(int port, conn_ledger *ledger) {
+	std::string input;		
+	while(true){
+		std::cout << "@^@: ";
+		std::getline(std::cin, input);
+		std::cout << input << std::endl;
+		std::istringstream iss(input);
+		std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
+                                 std::istream_iterator<std::string>());
 
-void handle_cin() {
-
+		if(results[0] == "help"){
+			help();
+		}
+		else if(results[0] == "myport"){
+			std::cout << "Port: "<< port << std::endl;
+		}
+		else if(results.size() == 3 && results[0] == "connect"){
+			connect(ledger, results[1], std::stoi(results[2]));
+		}
+		else{
+			std::cout << "Invalid command" << std::endl;
+			
+		}
+		
+	}
 }
 
 int main(int argc, char** argv) {
@@ -215,9 +249,9 @@ int main(int argc, char** argv) {
   ledger.list = &ledger_list;
   ledger.map = &ledger_map;
 
-  std::thread new_connections(&ledger, listen_new_connections, port);
+  //std::thread new_connections(&ledger, listen_new_connections, port);
 
-  handle_cin();
+  handle_cin(port, &ledger);
 
   return 0;
 }
