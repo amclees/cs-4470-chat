@@ -103,9 +103,9 @@ void listen_messages(int id) {
       break;
     }
 
-    std::cout << "Message received from " << ledger.map->at(id).ip_str << "\n";
-    std::cout << "Sender's Port: " << ledger.map->at(id).port_str << "\n";
-    std::cout << "Message: \"" << message_buf << "\"" << std::endl;
+    std::cout << "Message received from " << ledger.map->at(id).ip_str << std::endl;
+    std::cout << "Sender's Port: " << ledger.map->at(id).port_str << std::endl;
+    std::cout << "Message: " << message_buf << std::endl;
   }
   close(ledger.map->at(id).socket);
   std::cout << "Connection #" << id << " terminated" << std::endl;
@@ -118,7 +118,7 @@ void send_message(int id, char message[100]) {
     case -1:
       std::cout << "Error sending message to connection #" << id << std::endl;
     default:
-      std::cout << "Message send to connection #" << id << std::endl;
+      std::cout << "Message sent to connection #" << id << std::endl;
       break;
   }
 }
@@ -261,7 +261,7 @@ void myip() {
   printf("%s\n", buf);
 }
 
-void help(){
+void help() {
   std::cout << "myip : Displays host ip address" << std::endl;
   std::cout << "myport : Displays port currently listening for incoming connections" << std::endl;
   std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer" << std::endl;
@@ -320,7 +320,7 @@ void handle_cin(int port) {
         results[2] += " ";
       }
       strcpy(padded, results[2].c_str());
-      //SEND_MESSAGE(LEDGER, STD::STOI(RESUlts[1]), results[2])
+      send_message(std::stoi(results[1]), padded);
     } else if (results[0] == "exit") {
       for (int item : *(ledger.list)) {
         terminate(item);
