@@ -301,6 +301,12 @@ void handle_cin(int port) {
     std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
         std::istream_iterator<std::string>());
 
+    if (results.size() > 3) {
+      for (int i = 3; i < results.size(); i++) {
+        results[2] += " " + results[i];
+      }
+    }
+
     if (results[0] == "help") {
       help();
     } else if (results[0] == "myip") {
@@ -327,7 +333,7 @@ void handle_cin(int port) {
       }
 
       terminate(to_terminate);  
-    } else if (results[0] == "send" && results.size() == 3) {
+    } else if (results[0] == "send" && results.size() >= 3) {
       if (results[2].length() > 100) {
         std::cout << "That message is too long." << std::endl;
         continue;
