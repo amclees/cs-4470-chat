@@ -257,17 +257,18 @@ void handle_cin(int port, conn_ledger *ledger) {
 	std::string input;		
 	while(true){
 		std::cout << "@^@: ";
-		std::getline(std::cin, input);
-		std::istringstream iss(input);
-		std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
+		std::getline(std::cin, input);  
+        if(input.length() > 0){
+		    std::istringstream iss(input);
+		    std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
                                  std::istream_iterator<std::string>());
-
-		if(results[0] == "help"){
-			help();
-		}
-		else if(results[0] == "myip"){
-			myip();		
-		}
+        
+		    if(results[0] == "help"){
+		    	help();
+		    }
+	    	else if(results[0] == "myip"){
+		    	myip();		
+		    }
 		else if(results[0] == "myport"){
 			std::cout << "Port: "<< port << std::endl;
 		}
@@ -304,6 +305,7 @@ void handle_cin(int port, conn_ledger *ledger) {
 			std::cout << "Invalid command" << std::endl;
 			
 		}
+        }
 		
 	}
 }
