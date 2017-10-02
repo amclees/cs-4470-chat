@@ -14,7 +14,7 @@
 #include <vector>
 #include <iterator>
 std::mutex conn_info_mutex;
-int id = 0;
+int id_pool = 0;
 bool global_exit = false;
 
 struct conn_info {
@@ -31,17 +31,22 @@ struct conn_ledger {
   std::map<int, struct conn_info>* map;
 };
 
+struct conn_ledger ledger;
+std::list<int> ledger_list;
+std::map<int, struct conn_info> ledger_map;
+
 int get_id() {
   conn_info_mutex.lock();
-  int new_id = id++;
+  int new_id = id_pool++;
   conn_info_mutex.unlock();
   return new_id;
 }
 
-void register_connection(struct conn_ledger* ledger, struct conn_info conn_info) {
-  std::cerr << "Made connection with\n  socket descriptor " << conn_info.socket << "\n  " << conn_info.ip_str << ":" << conn_info.port_str << "\n";
-  ledger->list->push_back(conn_info.id);
-  ledger->map->insert(std::pair<int, struct conn_info>(conn_info.id, conn_info));
+void register_connection(struct conn_info conn_info) {
+  std::cerr << "Made connection with\n  socket descriptor " << conn_info.socket << "\n  " << conn_info.ip_str << " port " << conn_info.port_str << std::endl;
+  ledger.list->push_back(conn_info.id);
+  std::cout << "id regged is " << conn_info.id << std::endl;
+  ledger.map->insert(std::pair<int, struct conn_info>(conn_info.id, conn_info));
 }
 
 struct conn_info make_conn_info(int socket, int port, struct sockaddr* dest_addr) {
@@ -59,7 +64,7 @@ struct conn_info make_conn_info(int socket, int port, struct sockaddr* dest_addr
       inet_ntop(AF_INET6, &(((struct sockaddr_in6*)dest_addr)->sin6_addr), conn_info.ip_str, INET6_ADDRSTRLEN);
       break;
     default:
-      std::cerr << "Invalid address family in dest_addr struct when making connection info.\n";
+      std::cerr << "Invalid address family: \"" << dest_addr->sa_family << "\" in dest_addr struct when making connection info." << std::endl;
       break;
   }
 
@@ -73,44 +78,52 @@ bool running_check() {
   return !global_exit;
 }
 
-void listen_messages(struct conn_ledger* ledger, int id, int socket) {
+void listen_messages(int id) {
+  std::cout << "id listening is " << id << std::endl;
   char message_buf[100];
-  while(running_check() && !ledger->map->at(id).terminate) {
-    int recv_status = recv(socket, message_buf, 100, 0);
+  bool should_break = false;
+  while(running_check() && !ledger.map->at(id).terminate) {
+    int recv_status = recv(ledger.map->at(id).socket, message_buf, 100, 0);
     switch (recv_status) {
       case 0:
-        std::cout << "Connection closed: #" << id << " at " << ledger->map->at(id).ip_str << " port " << ledger->map->at(id).port_str << "\n";
+        std::cout << "Connection closed: #" << id << " at " << ledger.map->at(id).ip_str << " port " << ledger.map->at(id).port_str << std::endl;
+        should_break = true;
         break;
       case -1:
-        std::cout << "Error receiving message from connection #" << id << "\n";
-        continue;
+        std::cout << "Error " << errno << " receiving message from connection #" << id << std::endl;
+        should_break = true;
+        break;
     }
 
-    std::cout << "Message received from " << ledger->map->at(id).ip_str << "\n";
-    std::cout << "Sender's Port: " << ledger->map->at(id).port_str << "\n";
-    std::cout << "Message: \"" << message_buf << "\"\n";
+    if (should_break) {
+      break;
+    }
+
+    std::cout << "Message received from " << ledger.map->at(id).ip_str << "\n";
+    std::cout << "Sender's Port: " << ledger.map->at(id).port_str << "\n";
+    std::cout << "Message: \"" << message_buf << "\"" << std::endl;
   }
-  close(socket);
-  std::cout << "Connection #" << id << " terminated\n";
+  close(ledger.map->at(id).socket);
+  std::cout << "Connection #" << id << " terminated" << std::endl;
 }
 
-void send_message(struct conn_ledger* ledger, int id, char message[100]) {
-  int socket = ledger->map->at(id).socket;
+void send_message(int id, char message[100]) {
+  int socket = ledger.map->at(id).socket;
   int send_status = send(socket, message, 100, 0);
   switch (send_status) {
     case -1:
-      std::cout << "Error sending message to connection #" << id << "\n";
+      std::cout << "Error sending message to connection #" << id << std::endl;
     default:
-      std::cout << "Message send to connection #" << id << "\n";
+      std::cout << "Message send to connection #" << id << std::endl;
       break;
   }
 }
 
 void print_listen_failure_msg(int port) {
-  std::cout << "Unable to begin listening on port " << port << ". No connections will be accepted, but you can still initiate connections from this computer.\n";
+  std::cout << "Unable to begin listening on port " << port << ". No connections will be accepted, but you can still initiate connections from this computer." << std::endl;
 }
 
-void listen_new_connections(struct conn_ledger* ledger, int port) {
+void listen_new_connections(int port) {
   int status;
   struct addrinfo hints;
   struct addrinfo* servinfo;
@@ -125,21 +138,21 @@ void listen_new_connections(struct conn_ledger* ledger, int port) {
   hints.ai_socktype = SOCK_STREAM;
 
   if ((status = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0) {
-    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << "\n";
+    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << std::endl;
     print_listen_failure_msg(port);
     std::terminate();
   }
 
   int new_conn_socket = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
   if (new_conn_socket == -1) {
-    std::cerr << "Unable to get socket descriptor to listen for connections.\n";
+    std::cerr << "Unable to get socket descriptor to listen for connections." << std::endl;
     print_listen_failure_msg(port);
     std::terminate();
   }
 
   int bind_status = bind(new_conn_socket, servinfo->ai_addr, servinfo->ai_addrlen);
   if (bind_status == -1) {
-    std::cerr << "Unable to bind to port " << port << ".\n";
+    std::cerr << "Unable to bind to port " << port << std::endl;
     print_listen_failure_msg(port);
     std::terminate();
   }
@@ -147,32 +160,31 @@ void listen_new_connections(struct conn_ledger* ledger, int port) {
   while (running_check()) {
     int listen_status = listen(new_conn_socket, 5);
     if (listen_status == -1) {
-      std::cerr << "Unable to listen on port " << port << ".\n";
+      std::cerr << "Unable to listen on port " << port << std::endl;
       print_listen_failure_msg(port);
       std::terminate();
     }
 
     int accepted_socket = accept(new_conn_socket, (struct sockaddr*)&dest_addr, &addr_size);
     if (accepted_socket == -1) {
-      std::cerr << "Unable to accept new connection.\n";
-      std::cout << "Failed to accept an incoming connection; continuing to listen for new connections.\n";
+      std::cerr << "Unable to accept new connection." << std::endl;
+      std::cout << "Failed to accept an incoming connection; continuing to listen for new connections." << std::endl;
       continue;
     }
 
     struct conn_info conn_info = make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr);
-    register_connection(ledger, conn_info);
-    std::thread listener_thread(listen_messages, ledger, conn_info.id, port);
+    register_connection(conn_info);
+    std::thread listener_thread(listen_messages, conn_info.id);
+    listener_thread.detach();
   }
 
   freeaddrinfo(servinfo);
 }
 
-void connect(struct conn_ledger* ledger, std::string dest, int port) {
+void connect(std::string dest, int port) {
   int status;
   struct addrinfo hints;
   struct addrinfo* servinfo;
-  struct sockaddr_storage dest_addr;
-  socklen_t addr_size = sizeof(dest_addr);
   char port_str[6];
   sprintf(port_str, "%d", port);
   const char* dest_str = dest.c_str();
@@ -183,25 +195,26 @@ void connect(struct conn_ledger* ledger, std::string dest, int port) {
   hints.ai_socktype = SOCK_STREAM;
 
   if ((status = getaddrinfo(dest_str, port_str, &hints, &servinfo)) != 0) {
-    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << "\n";
+    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << "\n" << std::endl;
     // TODO: Error message
     return;
   }
 
   int socket_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
   if (socket_fd == -1) {
-    std::cerr << "Unable to get socket descriptor to connect";
+    std::cerr << "Unable to get socket descriptor to connect" << std::endl;
     // TODO: Error message
     return;
   }
 
   connect(socket_fd, servinfo->ai_addr, servinfo->ai_addrlen);
 
-  struct conn_info conn_info = make_conn_info(socket_fd, port, (struct sockaddr*)&dest_addr);
+  struct conn_info conn_info = make_conn_info(socket_fd, port, servinfo->ai_addr);
 
-  register_connection(ledger, conn_info);
+  register_connection(conn_info);
 
-  std::thread incoming_messages(listen_messages, ledger, id, port);
+  std::thread incoming_messages(listen_messages, conn_info.id);
+  incoming_messages.detach();
 
   freeaddrinfo(servinfo);
 }
@@ -215,7 +228,7 @@ void help(){
 	std::cout << "exit : Terinates all existing connections  and terminates the program"<<std::endl;
 	
 }	
-void handle_cin(int port, conn_ledger *ledger) {
+void handle_cin(int port) {
 	std::string input;		
 	while(true){
 		std::cout << "@^@: ";
@@ -232,7 +245,7 @@ void handle_cin(int port, conn_ledger *ledger) {
 			std::cout << "Port: "<< port << std::endl;
 		}
 		else if(results.size() == 3 && results[0] == "connect"){
-			connect(ledger, results[1], std::stoi(results[2]));
+			connect(results[1], std::stoi(results[2]));
 		}
 		else{
 			std::cout << "Invalid command" << std::endl;
@@ -263,15 +276,14 @@ int main(int argc, char** argv) {
   }
 
   std::cout << "Initializing chat on port " << port << "\n";
-  struct conn_ledger ledger;
-  std::list<int> ledger_list;
-  std::map<int, struct conn_info> ledger_map;
   ledger.list = &ledger_list;
   ledger.map = &ledger_map;
 
-  std::thread new_connections(listen_new_connections, &ledger, port);
+  std::thread new_connections(listen_new_connections, port);
 
-  handle_cin(port, &ledger);
+  handle_cin(port);
+
+  new_connections.join();
 
   return 0;
 }
