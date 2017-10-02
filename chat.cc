@@ -13,6 +13,10 @@
 #include <sstream>
 #include <vector>
 #include <iterator>
+#include <netinet/in.h>
+#include <net/if.h>
+#include <ifaddrs.h>
+#include <errno.h>
 std::mutex conn_info_mutex;
 int id_pool = 0;
 bool global_exit = false;
@@ -55,7 +59,7 @@ struct conn_info make_conn_info(int socket, int port, struct sockaddr* dest_addr
   conn_info.socket = socket;
   conn_info.port = port;
   conn_info.terminate = false;
-  
+
   switch (dest_addr->sa_family) {
     case AF_INET:
       inet_ntop(AF_INET, &(((struct sockaddr_in*)dest_addr)->sin_addr), conn_info.ip_str, INET_ADDRSTRLEN);
@@ -218,41 +222,114 @@ void connect(std::string dest, int port) {
 
   freeaddrinfo(servinfo);
 }
-void help(){
-	std::cout << "myip : Displays host ip address" << std::endl;
-	std::cout << "myport : Displays port currently listening for incoming connections"<<std::endl;
-	std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer"<<std::endl;
-	std::cout << "list : Prints a list of all saved connections"<<std::endl;
-	std::cout << "terminate <connection id> : Closes the selected connections"<<std::endl;
-	std::cout << "send <connection id> <message> : Sends a message to the selected connection"<<std::endl;
-	std::cout << "exit : Terinates all existing connections  and terminates the program"<<std::endl;
-	
-}	
-void handle_cin(int port) {
-	std::string input;		
-	while(true){
-		std::cout << "@^@: ";
-		std::getline(std::cin, input);
-		std::cout << input << std::endl;
-		std::istringstream iss(input);
-		std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
-                                 std::istream_iterator<std::string>());
 
-		if(results[0] == "help"){
-			help();
-		}
-		else if(results[0] == "myport"){
-			std::cout << "Port: "<< port << std::endl;
-		}
-		else if(results.size() == 3 && results[0] == "connect"){
-			connect(results[1], std::stoi(results[2]));
-		}
-		else{
-			std::cout << "Invalid command" << std::endl;
-			
-		}
-		
-	}
+void myip() {
+  struct ifaddrs *myaddrs, *ips;
+  void *in_addr;
+  char buf[64];
+  
+  if (getifaddrs(&myaddrs) != 0){
+    perror("getifaddrs");
+    exit(1);
+  }
+
+  for (ips = myaddrs; ips != NULL; ips =ips->ifa_next){
+    if (ips->ifa_addr == NULL) {
+      continue;
+    }
+    if (!(ips->ifa_flags & IFF_UP)) {
+      continue;
+    }
+
+    switch (ips->ifa_addr->sa_family) {
+      case AF_INET:
+        {
+          struct sockaddr_in *s4 = (struct sockaddr_in *)ips->ifa_addr;
+          in_addr = &s4->sin_addr;
+          break;
+        }
+      default:
+        continue;
+    }
+
+    if (!inet_ntop(ips->ifa_addr->sa_family, in_addr, buf, sizeof(buf))) {
+      printf("%s: inet_ntop failed!\n", ips->ifa_name);
+    }
+  }
+
+  freeifaddrs(myaddrs);
+  printf("%s\n", buf);
+}
+
+void help(){
+  std::cout << "myip : Displays host ip address" << std::endl;
+  std::cout << "myport : Displays port currently listening for incoming connections" << std::endl;
+  std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer" << std::endl;
+  std::cout << "list : Prints a list of all saved connections" << std::endl;
+  std::cout << "terminate connection id> : Closes the selected connections" << std::endl;
+  std::cout << "send <connection id> <message> : Sends a message to the selected connection" << std::endl;
+  std::cout << "exit : Terinates all existing connections  and terminates the program" << std::endl;
+}  
+
+void list() {
+  std::cout << "Id: IP address         Port No." << std::endl;
+  for (int item : *(ledger.list)) {
+    std::cout << (*(ledger.map))[item].id <<": " << (*(ledger.map))[item].ip_str << "       "    <<  (*(ledger.map))[item].port << std::endl;
+  }
+}
+
+void terminate(int id){
+  if (0 != (*(ledger.map)).count(id)){
+    (*(ledger.map))[id].terminate = false;
+    (*(ledger.list)).remove(id);
+    (*(ledger.map)).erase(id);
+    std::cout << "Terminated Connection" << std::endl;
+  } else {
+    std::cout << "Connection does not exist" << std::endl;
+  }
+}
+
+void handle_cin(int port) {
+  std::string input;    
+  while (true) {
+    std::cout << "@^@: ";
+    std::getline(std::cin, input);
+    std::istringstream iss(input);
+    std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
+        std::istream_iterator<std::string>());
+
+    if (results[0] == "help") {
+      help();
+    } else if (results[0] == "myip") {
+      myip();    
+    } else if (results[0] == "myport") {
+      std::cout << "Port: "<< port << std::endl;
+    } else if (results.size() == 3 && results[0] == "connect") {
+      connect(results[1], std::stoi(results[2]));
+    } else if (results[0] == "list"){
+      list();
+    } else if (results[0] == "terminate" && results.size()==2) {
+      terminate(std::stoi(results[1]));  
+    } else if (results[0] == "send" && results.size() == 3) {
+      if (results[2].length() > 100) {
+        std::cout << "That message is too long." << std::endl;
+      }
+
+      char padded[100];
+      for (int padding = results[2].length(); padding <= 100; padding++) {
+        results[2] += " ";
+      }
+      strcpy(padded, results[2].c_str());
+      //SEND_MESSAGE(LEDGER, STD::STOI(RESUlts[1]), results[2])
+    } else if (results[0] == "exit") {
+      for (int item : *(ledger.list)) {
+        terminate(item);
+      }      
+      exit(1);
+    } else {
+      std::cout << "Invalid command" << std::endl;
+    }
+  }
 }
 
 int main(int argc, char** argv) {
