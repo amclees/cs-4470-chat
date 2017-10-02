@@ -319,7 +319,23 @@ void handle_cin(int port) {
     } else if (results[0] == "myport") {
       std::cout << "Port: "<< port << std::endl;
     } else if (results.size() == 3 && results[0] == "connect") {
-      connect(results[1], std::stoi(results[2]));
+      int port_c = -1;
+      try {
+        port_c = std::stoi(results[2]);
+      } catch (std::invalid_argument exception) {
+        port_c = -1;
+      } catch (std::out_of_range) {
+        port_c = -1;
+      }
+
+      std::string local_ip = "127.0.0.1";
+      std::string local_name = "localhost";
+      if (port == port_c && (results[1].compare(local_ip) == 0 || results[1].compare(local_name) == 0)) {
+        std::cout << "No connections can be made to the same instance of this program" << std::endl;
+        continue;
+      }
+  
+      connect(results[1], port_c);
     } else if (results[0] == "list"){
       list();
     } else if (results[0] == "terminate" && results.size() == 2) {
