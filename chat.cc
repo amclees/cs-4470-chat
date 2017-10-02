@@ -92,6 +92,11 @@ void listen_messages(int id) {
         should_break = true;
         break;
       case -1:
+        if (errno == 107) {
+          std::cout << "Failed to connect to connection #" << id << std::endl;
+          should_break = true;
+          break;
+        }
         std::cout << "Error " << errno << " receiving message from connection #" << id << std::endl;
         should_break = true;
         break;
@@ -141,7 +146,7 @@ void listen_new_connections(int port) {
   hints.ai_socktype = SOCK_STREAM;
 
   if ((status = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0) {
-    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << std::endl;
+    std::cerr << "getaddrinfo error: " << gai_strerror(status) << std::endl;
     print_listen_failure_msg(port);
     std::terminate();
   }
@@ -198,15 +203,15 @@ void connect(std::string dest, int port) {
   hints.ai_socktype = SOCK_STREAM;
 
   if ((status = getaddrinfo(dest_str, port_str, &hints, &servinfo)) != 0) {
-    std::cerr << "getaddrinfo error: %s" << gai_strerror(status) << "\n" << std::endl;
-    // TODO: Error message
+    std::cerr << "getaddrinfo error: " << gai_strerror(status) << "\n" << std::endl;
+    std::cout << "Failed to resolve location; please check that you entered a valid host" << std::endl;
     return;
   }
 
   int socket_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
   if (socket_fd == -1) {
     std::cerr << "Unable to get socket descriptor to connect" << std::endl;
-    // TODO: Error message
+    std::cout << "Failed to connect to the location, check that it is available" << std::endl;
     return;
   }
 
