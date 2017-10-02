@@ -49,7 +49,6 @@ int get_id() {
 void register_connection(struct conn_info conn_info) {
   std::cerr << "Made connection with\n  socket descriptor " << conn_info.socket << "\n  " << conn_info.ip_str << " port " << conn_info.port_str << std::endl;
   ledger.list->push_back(conn_info.id);
-  std::cout << "id regged is " << conn_info.id << std::endl;
   ledger.map->insert(std::pair<int, struct conn_info>(conn_info.id, conn_info));
 }
 
@@ -83,7 +82,6 @@ bool running_check() {
 }
 
 void listen_messages(int id) {
-  std::cout << "id listening is " << id << std::endl;
   char message_buf[100];
   bool should_break = false;
   while(running_check() && !ledger.map->at(id).terminate) {
@@ -108,6 +106,7 @@ void listen_messages(int id) {
     std::cout << "Message: " << message_buf << std::endl;
   }
   close(ledger.map->at(id).socket);
+  std::cout << std::endl;
   std::cout << "Connection #" << id << " terminated" << std::endl;
 }
 
@@ -182,7 +181,7 @@ void listen_new_connections(int port) {
     listener_thread.detach();
   }
 
-  freeaddrinfo(servinfo);
+  //freeaddrinfo(servinfo);
 }
 
 void connect(std::string dest, int port) {
@@ -272,6 +271,10 @@ void help() {
 }  
 
 void list() {
+  if (ledger.list->empty()) {
+    std::cout << "No connections" << std::endl;
+    return;
+  }
   std::cout << "Id: IP address         Port No." << std::endl;
   for (int item : *(ledger.list)) {
     std::cout << (*(ledger.map))[item].id <<": " << (*(ledger.map))[item].ip_str << "       "    <<  (*(ledger.map))[item].port << std::endl;
@@ -279,11 +282,11 @@ void list() {
 }
 
 void terminate(int id){
-  if (0 != (*(ledger.map)).count(id)){
-    (*(ledger.map))[id].terminate = false;
+  if (0 != (*(ledger.map)).count(id)) {
+    (*(ledger.map))[id].terminate = true;
     (*(ledger.list)).remove(id);
     (*(ledger.map)).erase(id);
-    std::cout << "Terminated Connection" << std::endl;
+    std::cout << "Terminated connection" << std::endl;
   } else {
     std::cout << "Connection does not exist" << std::endl;
   }
@@ -308,11 +311,40 @@ void handle_cin(int port) {
       connect(results[1], std::stoi(results[2]));
     } else if (results[0] == "list"){
       list();
-    } else if (results[0] == "terminate" && results.size()==2) {
-      terminate(std::stoi(results[1]));  
+    } else if (results[0] == "terminate" && results.size() == 2) {
+      int to_terminate = -1;
+      try {
+        to_terminate = std::stoi(results[1]);
+      } catch (std::invalid_argument exception) {
+        to_terminate = -1;
+      } catch (std::out_of_range) {
+        to_terminate = -1;
+      }
+
+      if (ledger.map->count(to_terminate) == 0 || ledger.map->at(to_terminate).terminate) {
+        std::cout << "There is no connection with that id" << std::endl;
+        continue;
+      }
+
+      terminate(to_terminate);  
     } else if (results[0] == "send" && results.size() == 3) {
       if (results[2].length() > 100) {
         std::cout << "That message is too long." << std::endl;
+        continue;
+      }
+      
+      int dest = -1;
+      try {
+        dest = std::stoi(results[1]);
+      } catch (std::invalid_argument exception) {
+        dest = -1;
+      } catch (std::out_of_range) {
+        dest = -1;
+      }
+
+      if (ledger.map->count(dest) == 0 || ledger.map->at(dest).terminate) {
+        std::cout << "There is no connection with that id" << std::endl;
+        continue;
       }
 
       char padded[100];
@@ -320,14 +352,12 @@ void handle_cin(int port) {
         results[2] += " ";
       }
       strcpy(padded, results[2].c_str());
-      send_message(std::stoi(results[1]), padded);
+      send_message(dest, padded);
     } else if (results[0] == "exit") {
-      for (int item : *(ledger.list)) {
-        terminate(item);
-      }      
-      exit(1);
+      global_exit = true;
+      return;
     } else {
-      std::cout << "Invalid command" << std::endl;
+      std::cout << "Invalid command: please check that you are using the right arguments." << std::endl;
     }
   }
 }
@@ -357,10 +387,11 @@ int main(int argc, char** argv) {
   ledger.map = &ledger_map;
 
   std::thread new_connections(listen_new_connections, port);
+  new_connections.detach();
 
   handle_cin(port);
 
-  new_connections.join();
+  std::cout << "Successfully exited" << std::endl;
 
   return 0;
 }
