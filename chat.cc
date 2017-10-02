@@ -228,7 +228,7 @@ void help(){
 	std::cout << "myport : Displays port currently listening for incoming connections"<<std::endl;
 	std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer"<<std::endl;
 	std::cout << "list : Prints a list of all saved connections"<<std::endl;
-	std::cout << "iinate <connection id> : Closes the selected connections"<<std::endl;
+	std::cout << "terminate connection id> : Closes the selected connections"<<std::endl;
 	std::cout << "send <connection id> <message> : Sends a message to the selected connection"<<std::endl;
 	std::cout << "exit : Terinates all existing connections  and terminates the program"<<std::endl;
 	
@@ -279,6 +279,26 @@ void handle_cin(int port, conn_ledger *ledger) {
 		}	
 		else if(results[0] == "terminate" && results.size()==2){
 			terminate(std::stoi(results[1]), ledger);	
+		}
+		else if(results[0] == "send" && results.size() == 3){
+			if(results[2].length() > 100){
+				std::cout << "That message is too long." << std::endl;
+			}
+
+
+			char padded[100];
+			for(int padding = results[2].length(); padding <= 100; padding++){
+				results[2] += " ";
+			}
+			strcpy(padded, results[2].c_str());
+			//SEND_MESSAGE(LEDGER, STD::STOI(RESUlts[1]), results[2])
+			
+		}
+		else if(results[0] == "exit"){
+			for (int item : *(ledger->list)){ 
+				terminate(item, ledger);
+			}			
+			exit(1);
 		}
 		else{
 			std::cout << "Invalid command" << std::endl;
