@@ -186,7 +186,7 @@ void listen_new_connections(int port) {
     listener_thread.detach();
   }
 
-  //freeaddrinfo(servinfo);
+  freeaddrinfo(servinfo);
 }
 
 void connect(std::string dest, int port) {
