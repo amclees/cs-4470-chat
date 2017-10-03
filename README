@@ -1,0 +1,33 @@
+            Socket Chat Program (CS 4470 Project 1)
+__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)__)
+(  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (  (
+
+Authors: Andrew McLees and Matthew Gerlits 
+
+Prerequisites
+=============
+
+Computer running a *NIX operating system
+GNU C++ compiler supporting C Berkely Sockets API and C++11
+Make
+
+Building
+========
+
+Run `make` from the project root.
+
+Running
+=======
+
+Run `./chat <port #>` where `<port #>` is the port the application should listen on for incoming connections.
+Once the application is running, type `help` for details on available commands.
+
+
+Members' Contributions
+======================
+
+Threading -> Andrew McLees
+Connection listening, connecting, sending, receiving -> Andrew McLees
+User input and command execution loop -> Matthew Gerlits
+Getting own IP -> Matthew Gerlits
+Connection listing -> Matthew Gerlits
