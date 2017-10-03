@@ -302,6 +302,9 @@ void handle_cin(int port) {
   while (true) {
     std::cout << "@^@: ";
     std::getline(std::cin, input);
+    if (input.length() < 1) {
+      continue;
+    }
     std::istringstream iss(input);
     std::vector<std::string> results((std::istream_iterator<std::string>(iss)),
         std::istream_iterator<std::string>());
