@@ -17,28 +17,18 @@
 #include <net/if.h>
 #include <ifaddrs.h>
 #include <errno.h>
+
+#include <chat.h>
+
 std::mutex conn_info_mutex;
 int id_pool = 0;
 bool global_exit = false;
-
-struct conn_info {
-  int id;
-  int socket;
-  int port;
-  bool terminate;
-  char ip_str[INET6_ADDRSTRLEN];
-  char port_str[6];
-};
-
-struct conn_ledger {
-  std::list<int>* list;
-  std::map<int, struct conn_info>* map;
-};
 
 struct conn_ledger ledger;
 std::list<int> ledger_list;
 std::map<int, struct conn_info> ledger_map;
 
+// Returns a new unique ID for each connection
 int get_id() {
   conn_info_mutex.lock();
   int new_id = id_pool++;
@@ -273,7 +263,7 @@ void help() {
   std::cout << "terminate connection id> : Closes the selected connections" << std::endl;
   std::cout << "send <connection id> <message> : Sends a message to the selected connection" << std::endl;
   std::cout << "exit : Terinates all existing connections  and terminates the program" << std::endl;
-}  
+}
 
 void list() {
   if (ledger.list->empty()) {
@@ -310,7 +300,7 @@ void handle_cin(int port) {
         std::istream_iterator<std::string>());
 
     if (results.size() > 3) {
-      for (int i = 3; i < results.size(); i++) {
+      for (uint i = 3; i < results.size(); i++) {
         results[2] += " " + results[i];
       }
     }
@@ -362,7 +352,7 @@ void handle_cin(int port) {
         std::cout << "That message is too long." << std::endl;
         continue;
       }
-      
+
       int dest = -1;
       try {
         dest = std::stoi(results[1]);

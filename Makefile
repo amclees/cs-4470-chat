@@ -1,3 +1,6 @@
+CXX = g++
+CXXFLAGS = -Wall -g -std=c++11 -pthread -I ./ 
+
 chat : chat.cc chat.h
-	g++ -std=c++11 -pthread -o chat chat.cc
+	${CXX} ${CXXFLAGS} -o chat chat.cc
 

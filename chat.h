@@ -2,6 +2,23 @@
 #define CHAT_H_
 
 #include <string>
+#include <map>
+#include <list>
+#include <arpa/inet.h>
+
+struct conn_info {
+  int id;
+  int socket;
+  int port;
+  bool terminate;
+  char ip_str[INET6_ADDRSTRLEN];
+  char port_str[6];
+};
+
+struct conn_ledger {
+  std::list<int>* list;
+  std::map<int, struct conn_info>* map;
+};
 
 int get_id();
 
