@@ -96,13 +96,19 @@ void listen_messages(int id) {
       break;
     }
 
+    if (message_buf[0] == '\33') {
+      std::cout << "Connection closed: #" << id << " at " << ledger.map->at(id).ip_str << " port " << ledger.map->at(id).port_str << std::endl;
+      break;
+    }
+
     std::cout << "Message received from " << ledger.map->at(id).ip_str << std::endl;
     std::cout << "Sender's Port: " << ledger.map->at(id).port_str << std::endl;
     std::cout << "Message: " << message_buf << std::endl;
   }
   close(ledger.map->at(id).socket);
+  ledger.list->remove(id);
+  ledger.map->erase(id);
   std::cout << std::endl;
-  std::cout << "Connection #" << id << " terminated" << std::endl;
 }
 
 void send_message(int id, char message[100]) {
@@ -260,7 +266,7 @@ void help() {
   std::cout << "myport : Displays port currently listening for incoming connections" << std::endl;
   std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer" << std::endl;
   std::cout << "list : Prints a list of all saved connections" << std::endl;
-  std::cout << "terminate connection id> : Closes the selected connections" << std::endl;
+  std::cout << "terminate <connection id> : Closes the selected connections" << std::endl;
   std::cout << "send <connection id> <message> : Sends a message to the selected connection" << std::endl;
   std::cout << "exit : Terinates all existing connections  and terminates the program" << std::endl;
 }
@@ -272,16 +278,20 @@ void list() {
   }
   std::cout << "Id: IP address         Port No." << std::endl;
   for (int item : *(ledger.list)) {
+    if (ledger.map->at(item).terminate) {
+      continue;
+    }
     std::cout << (*(ledger.map))[item].id <<": " << (*(ledger.map))[item].ip_str << "       "    <<  (*(ledger.map))[item].port << std::endl;
   }
 }
 
 void terminate(int id) {
   if (0 != (*(ledger.map)).count(id)) {
+    char terminate_message[100];
+    terminate_message[0] = '\33';
+    send_message(id, terminate_message);
     (*(ledger.map))[id].terminate = true;
-    (*(ledger.list)).remove(id);
-    (*(ledger.map)).erase(id);
-    std::cout << "Terminated connection" << std::endl;
+    std::cout << "Connection #" << id << " terminated" << std::endl;
   } else {
     std::cout << "Connection does not exist" << std::endl;
   }
@@ -374,6 +384,9 @@ void handle_cin(int port) {
       strcpy(padded, results[2].c_str());
       send_message(dest, padded);
     } else if (results[0] == "exit") {
+      for (int id : *(ledger.list)) {
+        terminate(id);
+      }
       global_exit = true;
       return;
     } else {
