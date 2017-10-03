@@ -1,2 +1,3 @@
-all:
-	g++ -o chat -std=c++11 -pthread chat.cc
+chat : chat.cc chat.h
+	g++ -std=c++11 -pthread -o chat chat.cc
+

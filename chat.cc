@@ -286,7 +286,7 @@ void list() {
   }
 }
 
-void terminate(int id){
+void terminate(int id) {
   if (0 != (*(ledger.map)).count(id)) {
     (*(ledger.map))[id].terminate = true;
     (*(ledger.list)).remove(id);
