@@ -20,6 +20,8 @@ struct conn_ledger {
   std::map<int, struct conn_info>* map;
 };
 
+int get_port(struct sockaddr *sa);
+
 int get_id();
 
 void register_connection(struct conn_info conn_info);

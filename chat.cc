@@ -176,13 +176,28 @@ void listen_new_connections(int port) {
       continue;
     }
 
-    struct conn_info conn_info = make_conn_info(accepted_socket, port, (struct sockaddr*)&dest_addr);
+    int dest_port = get_port((struct sockaddr*)&dest_addr);
+    struct conn_info conn_info = make_conn_info(accepted_socket, dest_port, (struct sockaddr*)&dest_addr);
     register_connection(conn_info);
     std::thread listener_thread(listen_messages, conn_info.id);
     listener_thread.detach();
   }
 
   freeaddrinfo(servinfo);
+}
+
+int get_port(struct sockaddr *sa) {
+  switch (sa->sa_family) {
+    case AF_INET:
+      return (((struct sockaddr_in*)sa)->sin_port);
+      break;
+    case AF_INET6:
+      return (((struct sockaddr_in6*)sa)->sin6_port);
+      break;
+    default:
+      std::cerr << "Invalid address family in getting port";
+      return -1;
+  }
 }
 
 void connect(std::string dest, int port) {
@@ -335,6 +350,20 @@ void handle_cin(int port) {
       std::string local_name = "localhost";
       if (port == port_c && (results[1].compare(local_ip) == 0 || results[1].compare(local_name) == 0)) {
         std::cout << "No connections can be made to the same instance of this program" << std::endl;
+        continue;
+      }
+
+      bool should_continue = false;
+      for (int id : *(ledger.list)) {
+        struct conn_info* conn_info = &ledger.map->at(id);
+        std::string ip_str = conn_info->ip_str;
+        if (!conn_info->terminate && conn_info->port == port_c && ip_str.compare(results[1]) == 0) {
+          std::cout << "Duplicate connections may not be made" << std::endl;
+          should_continue = true;
+          break;
+        }
+      }
+      if (should_continue) {
         continue;
       }
   
