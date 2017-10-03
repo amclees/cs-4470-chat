@@ -21,7 +21,7 @@
 #include <chat.h>
 
 std::mutex conn_info_mutex;
-int id_pool = 0;
+int id_pool = 0, my_port = -1;
 bool global_exit = false;
 
 struct conn_ledger ledger;
@@ -176,8 +176,11 @@ void listen_new_connections(int port) {
       continue;
     }
 
-    int dest_port = get_port((struct sockaddr*)&dest_addr);
-    struct conn_info conn_info = make_conn_info(accepted_socket, dest_port, (struct sockaddr*)&dest_addr);
+    int possible_dest_value = -1;
+    int* dest_port = &possible_dest_value;
+    recv(accepted_socket, dest_port, sizeof(int), 0);
+
+    struct conn_info conn_info = make_conn_info(accepted_socket, *dest_port, (struct sockaddr*)&dest_addr);
     register_connection(conn_info);
     std::thread listener_thread(listen_messages, conn_info.id);
     listener_thread.detach();
@@ -227,6 +230,8 @@ void connect(std::string dest, int port) {
   }
 
   connect(socket_fd, servinfo->ai_addr, servinfo->ai_addrlen);
+
+  send(socket_fd, &my_port, sizeof(int), 0);
 
   struct conn_info conn_info = make_conn_info(socket_fd, port, servinfo->ai_addr);
 
@@ -444,6 +449,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  my_port = port;
   std::cout << "Initializing chat on port " << port << "\n";
   ledger.list = &ledger_list;
   ledger.map = &ledger_map;
