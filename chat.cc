@@ -144,21 +144,21 @@ void listen_new_connections(int port) {
   if ((status = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0) {
     std::cerr << "getaddrinfo error: " << gai_strerror(status) << std::endl;
     print_listen_failure_msg(port);
-    std::terminate();
+    return;
   }
 
   int new_conn_socket = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
   if (new_conn_socket == -1) {
     std::cerr << "Unable to get socket descriptor to listen for connections." << std::endl;
     print_listen_failure_msg(port);
-    std::terminate();
+    return;
   }
 
   int bind_status = bind(new_conn_socket, servinfo->ai_addr, servinfo->ai_addrlen);
   if (bind_status == -1) {
     std::cerr << "Unable to bind to port " << port << std::endl;
     print_listen_failure_msg(port);
-    std::terminate();
+    return;
   }
 
   while (running_check()) {
@@ -166,7 +166,7 @@ void listen_new_connections(int port) {
     if (listen_status == -1) {
       std::cerr << "Unable to listen on port " << port << std::endl;
       print_listen_failure_msg(port);
-      std::terminate();
+      return;
     }
 
     int accepted_socket = accept(new_conn_socket, (struct sockaddr*)&dest_addr, &addr_size);
