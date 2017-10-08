@@ -14,6 +14,7 @@
 #include <vector>
 #include <iterator>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <net/if.h>
 #include <ifaddrs.h>
 #include <errno.h>
@@ -229,7 +230,14 @@ void connect(std::string dest, int port) {
     return;
   }
 
-  connect(socket_fd, servinfo->ai_addr, servinfo->ai_addrlen);
+  int retries = 2;
+  setsockopt(socket_fd, IPPROTO_TCP, TCP_SYNCNT, &retries, sizeof(retries));
+  int connect_status = connect(socket_fd, servinfo->ai_addr, servinfo->ai_addrlen);
+  if (connect_status == -1) {
+    std::cerr << "Failed to connect; error code: " << errno << std::endl;
+    std::cout << "Failed to connect to destination, please check that it is not dropping packets on that port." << std::endl;
+    return;
+  }
 
   send(socket_fd, &my_port, sizeof(int), 0);
 
@@ -296,6 +304,15 @@ void list() {
     std::cout << "No connections" << std::endl;
     return;
   }
+  bool no_items = true;
+  for (int item : *(ledger.list)) {
+    no_items = no_items && ledger.map->at(item).terminate;
+  }
+  if (no_items) {
+    std::cout << "No connections" << std::endl;
+    return;
+  }
+
   std::cout << "Id: IP address         Port No." << std::endl;
   for (int item : *(ledger.list)) {
     if (ledger.map->at(item).terminate) {
@@ -320,7 +337,7 @@ void terminate(int id) {
 void handle_cin(int port) {
   std::string input;    
   while (true) {
-    std::cout << "@^@: ";
+    //std::cout << "@^@: ";
     std::getline(std::cin, input);
     if (input.length() < 1) {
       continue;
