@@ -292,11 +292,11 @@ void myip() {
 void help() {
   std::cout << "myip : Displays host ip address" << std::endl;
   std::cout << "myport : Displays port currently listening for incoming connections" << std::endl;
-  std::cout << "connect :<destination id> <port no> : Attempts to connect to another computer" << std::endl;
+  std::cout << "connect <destination ip or hostname> <port no> : Attempts to connect to another computer" << std::endl;
   std::cout << "list : Prints a list of all saved connections" << std::endl;
   std::cout << "terminate <connection id> : Closes the selected connections" << std::endl;
   std::cout << "send <connection id> <message> : Sends a message to the selected connection" << std::endl;
-  std::cout << "exit : Terinates all existing connections  and terminates the program" << std::endl;
+  std::cout << "exit : Terminates all existing connections and terminates the program" << std::endl;
 }
 
 void list() {
